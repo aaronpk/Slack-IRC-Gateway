@@ -33,13 +33,18 @@ server.route({
     var text = request.payload.text;
 
     reply('ok: '+username);
-
-    // Replace Slack refs with IRC refs
-    console.log("INPUT: "+username+": "+text);
-    replace_slack_entities(text, function(text) {
-      console.log("TEXT: "+username+": "+text);
-      process_message(username, text);
-    });
+    
+    // Don't echo things that slackbot says in Slack on behalf of IRC users.
+    // Unfortunately there's nothing in the webhook payload that distinguishes
+    // the messages from IRC users and those from other things SlackBot does.    
+    if(username != 'slackbot') {
+      // Replace Slack refs with IRC refs
+      console.log("INPUT: "+username+": "+text);
+      replace_slack_entities(text, function(text) {
+        console.log("TEXT: "+username+": "+text);
+        process_message(username, text);
+      });
+    }
   }
 });
 
