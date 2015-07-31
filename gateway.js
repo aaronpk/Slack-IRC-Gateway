@@ -35,8 +35,9 @@ server.route({
     reply('ok: '+username);
 
     // Replace Slack refs with IRC refs
+    console.log("INPUT: "+username+": "+text);
     replace_slack_entities(text, function(text) {
-      console.log("Replaced: "+text);
+      console.log("TEXT: "+username+": "+text);
       process_message(username, text);
     });
   }
@@ -57,6 +58,9 @@ function slack_api(method, params, callback) {
 }
 
 function replace_slack_entities(text, replace_callback) {
+  text = text.replace(/<([a-z]+:[^\|>]+)\|([^>]+)>/, '$2');
+  text = text.replace(/<([a-z]+:[^\|>]+)>/, '$1');
+    
   if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
     async.map(matches, function(entity, callback){
       var match = entity.match(/<([@#])([UC][^>\|]+)(?:\|([^\|]+))?>/);
@@ -100,7 +104,7 @@ function process_message(username, text) {
       autoConnect: false,
       debug: true,
       userName: username,
-      realName: username,
+      realName: username+" via Slack-IRC-Gateway",
       channels: [config.irc.channel]
     });
 
@@ -109,12 +113,12 @@ function process_message(username, text) {
     });
 
     clients[username].addListener('join', function(channel, nick, message){
-      console.log("[join] "+nick+" joined "+channel);
-      if(irc_nick == nick) {
-        console.log("Registered!");
+      console.log("[join] "+nick+" joined "+channel+" (me: "+clients[username].nick+")");
+      if(nick == clients[username].nick) {
+        console.log(irc_nick+ " successfully connected! (joined as "+nick+")");
         // Now send the queued messages
         for(var i in queued[username]) {
-          clients[username].say(config.channel, queued[username][i]);
+          clients[username].say(config.irc.channel, queued[username][i]);
         }
         queued[username] = null;
 
@@ -132,7 +136,7 @@ function process_message(username, text) {
     queued[username].push(text);
   } else {
     // Bot is already connected
-    clients[username].say(config.channel, text);
+    clients[username].say(config.irc.channel, text);
 
     clearTimeout(timers[username]);
     timers[username] = setTimeout(function(){
