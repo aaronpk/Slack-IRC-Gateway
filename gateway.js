@@ -92,8 +92,8 @@ function slack_api(method, params, callback) {
 }
 
 function replace_slack_entities(text, replace_callback) {
-  text = text.replace(new RegExp('<([a-z]+:[^\|>]+)\|([^>]+)>','g'), '$2');
-  text = text.replace(new RegExp('<([a-z]+:[^\|>]+)>/','g'), '$1');
+  text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)\\|([^>]+)>','g'), '$2');
+  text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)>','g'), '$1');
     
   if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
     async.map(matches, function(entity, callback){
