@@ -42,8 +42,37 @@ server.route({
       console.log("INPUT: "+username+": "+text);
       replace_slack_entities(text, function(text) {
         console.log("TEXT: "+username+": "+text);
-        process_message(username, text);
+        process_message(username, 'slack', text);
       });
+    }
+  }
+});
+
+server.route({
+  method: 'POST',
+  path: '/web/input',
+  handler: function (request, reply) {
+    var username = request.payload.user_name;
+    var text = request.payload.text;
+    
+    reply('ok: '+username);
+    
+    process_message(username, 'web', text);
+  }
+});
+
+// The web IRC gateway will post to here after the user enters their nick
+server.route({
+  method: 'POST',
+  path: '/web/join',
+  handler: function (request, reply) {
+    var username = request.payload.user_name;
+    
+    if(clients[username] == null) {
+      connect_to_irc(username, username, 'web');
+      reply('connecting');
+    } else {
+      reply('connected');
     }
   }
 });
@@ -63,8 +92,8 @@ function slack_api(method, params, callback) {
 }
 
 function replace_slack_entities(text, replace_callback) {
-  text = text.replace(/<([a-z]+:[^\|>]+)\|([^>]+)>/, '$2');
-  text = text.replace(/<([a-z]+:[^\|>]+)>/, '$1');
+  text = text.replace(new RegExp('<([a-z]+:[^\|>]+)\|([^>]+)>','g'), '$2');
+  text = text.replace(new RegExp('<([a-z]+:[^\|>]+)>/','g'), '$1');
     
   if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
     async.map(matches, function(entity, callback){
@@ -94,8 +123,13 @@ function replace_slack_entities(text, replace_callback) {
 }
 
 
-function process_message(username, text) {
-  var irc_nick = "["+username+"]";
+function process_message(username, method, text) {
+  var irc_nick;
+  if(method == 'slack') {
+    irc_nick = "["+username+"]";
+  } else {
+    irc_nick = username;
+  }
 
   // No client, and nothing in the queue
   // Connect and add to the queue
@@ -105,43 +139,19 @@ function process_message(username, text) {
     }
     queued[username].push(text);
 
-    clients[username] = new irc.Client(config.irc.hostname, irc_nick, {
-      autoConnect: false,
-      debug: true,
-      userName: username,
-      realName: username+" via Slack-IRC-Gateway",
-      channels: [config.irc.channel]
-    });
-
-    clients[username].connect(function() {
-      console.log("Connecting to IRC...");
-    });
-
-    clients[username].addListener('join', function(channel, nick, message){
-      console.log("[join] "+nick+" joined "+channel+" (me: "+clients[username].nick+")");
-      if(nick == clients[username].nick) {
-        console.log(irc_nick+ " successfully connected! (joined as "+nick+")");
-        // Now send the queued messages
-        for(var i in queued[username]) {
-          clients[username].say(config.irc.channel, queued[username][i]);
-        }
-        queued[username] = null;
-
-        // Set a timer to disconnect the bot after a while
-        timers[username] = setTimeout(function(){
-          clients[username].disconnect('Slack user timed out');
-          clients[username] = null;
-          timers[username] = null;
-        }, config.irc.disconnect_timeout);
-      }
-    });
+    connect_to_irc(username, irc_nick, method);
   } else if(queued[username] && queued[username].length > 0) {
     // There is already a client and something in the queue, which means
     // the bot is currently connecting. Keep adding to the queue
     queued[username].push(text);
   } else {
     // Bot is already connected
-    clients[username].say(config.irc.channel, text);
+    var match;
+    if(match=text.match(/^\/nick (.+)/)) {
+      clients[username].send("NICK", match[1]);
+    } else {
+      clients[username].say(config.irc.channel, text);
+    }
 
     clearTimeout(timers[username]);
     timers[username] = setTimeout(function(){
@@ -153,3 +163,37 @@ function process_message(username, text) {
   }
 }
 
+function connect_to_irc(username, irc_nick, method) {
+  clients[username] = new irc.Client(config.irc.hostname, irc_nick, {
+    autoConnect: false,
+    debug: true,
+    userName: method+'user',
+    realName: username+" via "+method+"-irc-gateway",
+    channels: [config.irc.channel]
+  });
+
+  clients[username].connect(function() {
+    console.log("Connecting to IRC...");
+  });
+
+  clients[username].addListener('join', function(channel, nick, message){
+    console.log("[join] "+nick+" joined "+channel+" (me: "+clients[username].nick+")");
+    if(nick == clients[username].nick) {
+      console.log(irc_nick+ " successfully connected! (joined as "+nick+")");
+      // Now send the queued messages
+      if(queued[username]) {
+        for(var i in queued[username]) {
+          clients[username].say(config.irc.channel, queued[username][i]);
+        }
+        queued[username] = null;
+      }
+        
+      // Set a timer to disconnect the bot after a while
+      timers[username] = setTimeout(function(){
+        clients[username].disconnect('Slack user timed out');
+        clients[username] = null;
+        timers[username] = null;
+      }, config.irc.disconnect_timeout);
+    }
+  });
+}
