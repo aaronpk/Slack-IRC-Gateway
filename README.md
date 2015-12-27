@@ -17,6 +17,11 @@ Setup
 
 Now run gateway.js which listens on the configured HTTP port and will start connecting to IRC on behalf of your Slack users!
 
+Todo
+----
+
+Currently this only supports getting messages from Slack to an IRC channel. To get messages back from IRC to Slack, you need to run a separate bot that sends post requests to a Slack incoming web hook. Ideally that component should also be handled by this project.
+
 
 License
 -------
