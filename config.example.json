@@ -3,9 +3,22 @@
   "host": "127.0.0.1",
   "irc": {
     "hostname": "irc.freenode.net",
-    "channel": "#indiewebcamp",
     "disconnect_timeout": 600000
   },
+  "channels": [
+    {
+      "slack": "indieweb",
+      "irc": "#indieweb"
+    },
+    {
+      "slack": "dev",
+      "irc": "#indieweb-dev"
+    },
+    {
+      "slack": "chat",
+      "irc": "#indieweb-chat"
+    }
+  ],
   "slack": {
     "token": "xxxx"
   }
