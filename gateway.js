@@ -31,7 +31,7 @@ server.route({
   path: '/gateway/input',
   handler: function (request, reply) {
     var channel = request.payload.channel_name;
-    var username = request.payload.user_name;
+    var username = request.payload.user_name.replace(".","_");
     var text = request.payload.text;
 
     reply('ok: '+username);
@@ -79,7 +79,7 @@ server.route({
   handler: function (request, reply) {
     var username = request.payload.user_name;
     
-    if(clients[username] == null) {
+    if(clients["web:"+username] == null) {
       connect_to_irc(username, username, 'web');
       reply('connecting');
     } else {
@@ -137,48 +137,45 @@ function replace_slack_entities(text, replace_callback) {
 function process_message(channel, username, method, text) {
   var irc_nick;
   if(method == 'slack') {
-    irc_nick = "["+username+"]";
+    irc_nick = "["+username.replace(".","_")+"]";
   } else {
     irc_nick = username;
   }
 
   // No client, and nothing in the queue
   // Connect and add to the queue
-  if(clients[username] == null && queued[username] == null) {
-    if(queued[username] == null) {
-      queued[username] = new queue();
+  if(clients[method+":"+username] == null && queued[method+":"+username] == null) {
+    if(queued[method+":"+username] == null) {
+      queued[method+":"+username] = new queue();
     }
-    queued[username].push(channel, text);
+    queued[method+":"+username].push(channel, text);
 
     connect_to_irc(username, irc_nick, method);
-  } else if(queued[username] && queued[username].length() > 0) {
-    // console.log("Current messages in queue: "+queued[username].length());
-    // console.log(queued[username]);
-
+  } else if(queued[method+":"+username] && queued[method+":"+username].length() > 0) {
     // There is already a client and something in the queue, which means
     // the bot is currently connecting. Keep adding to the queue
-    queued[username].push(channel, text);
+    queued[method+":"+username].push(channel, text);
   } else {
     // Bot is already connected
     var match;
     if(match=text.match(/^\/nick (.+)/)) {
-      clients[username].send("NICK", match[1]);
+      clients[method+":"+username].send("NICK", match[1]);
     } else {
-      clients[username].say(channel, text);
+      clients[method+":"+username].say(channel, text);
     }
 
-    clearTimeout(timers[username]);
-    timers[username] = setTimeout(function(){
+    clearTimeout(timers[method+":"+username]);
+    timers[method+":"+username] = setTimeout(function(){
       console.log("Timed out: "+username)
-      clients[username].disconnect('went away');
-      clients[username] = null;
-      timers[username] = null;
+      clients[method+":"+username].disconnect('went away');
+      clients[method+":"+username] = null;
+      timers[method+":"+username] = null;
     }, config.irc.disconnect_timeout);
   }
 }
 
 function connect_to_irc(username, irc_nick, method) {
-  clients[username] = new irc.Client(config.irc.hostname, irc_nick, {
+  clients[method+":"+username] = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
     debug: true,
     userName: method+'user',
@@ -186,28 +183,28 @@ function connect_to_irc(username, irc_nick, method) {
     channels: config.channels.map(function(c){ return c.irc; })
   });
 
-  clients[username].connect(function() {
+  clients[method+":"+username].connect(function() {
     console.log("Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
   });
 
-  clients[username].addListener('join', function(channel, nick, message){
-    console.log("[join] "+nick+" joined "+channel+" (me: "+clients[username].nick+")");
-    if(nick == clients[username].nick) {
+  clients[method+":"+username].addListener('join', function(channel, nick, message){
+    console.log("[join] "+nick+" joined "+channel+" (me: "+clients[method+":"+username].nick+")");
+    if(nick == clients[method+":"+username].nick) {
       console.log(irc_nick+ " successfully joined "+channel+"! (joined as "+nick+")");
 
       // Now send the queued messages for the channel
-      if(queued[username]) {
+      if(queued[method+":"+username]) {
         var text;
-        while(text = queued[username].pop(channel)) {
-          clients[username].say(channel, text);
+        while(text = queued[method+":"+username].pop(channel)) {
+          clients[method+":"+username].say(channel, text);
         }
       }
         
       // Set a timer to disconnect the bot after a while
-      timers[username] = setTimeout(function(){
-        clients[username].disconnect('Slack user timed out');
-        clients[username] = null;
-        timers[username] = null;
+      timers[method+":"+username] = setTimeout(function(){
+        clients[method+":"+username].disconnect('Slack user timed out');
+        clients[method+":"+username] = null;
+        timers[method+":"+username] = null;
       }, config.irc.disconnect_timeout);
     }
   });
