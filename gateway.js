@@ -4,6 +4,7 @@ var request = require('request');
 var async = require('async');
 var Entities = require('html-entities').AllHtmlEntities;
 var entities = new Entities();
+var queue = require('./queue').queue;
 
 var config   = require(__dirname + '/config.json');
 
@@ -29,20 +30,29 @@ server.route({
   method: 'POST',
   path: '/gateway/input',
   handler: function (request, reply) {
+    var channel = request.payload.channel_name;
     var username = request.payload.user_name;
     var text = request.payload.text;
 
     reply('ok: '+username);
     
+    // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
+    var irc_channel = false;
+    for(var i in config.channels) {
+      if(channel == config.channels[i].slack) {
+        irc_channel = config.channels[i].irc;
+      }
+    }
+
     // Don't echo things that slackbot says in Slack on behalf of IRC users.
     // Unfortunately there's nothing in the webhook payload that distinguishes
     // the messages from IRC users and those from other things SlackBot does.    
-    if(username != 'slackbot') {
+    if(username != 'slackbot' && irc_channel) {
       // Replace Slack refs with IRC refs
-      console.log("INPUT: "+username+": "+text);
+      console.log("INPUT: #"+channel+" ["+username+"] "+text);
       replace_slack_entities(text, function(text) {
-        console.log("TEXT: "+username+": "+text);
-        process_message(username, 'slack', text);
+        console.log("INPUT: #"+channel+" ["+username+"] "+text);
+        process_message(irc_channel, username, 'slack', text);
       });
     }
   }
@@ -54,10 +64,11 @@ server.route({
   handler: function (request, reply) {
     var username = request.payload.user_name;
     var text = request.payload.text;
-    
+    var channel = request.payload.channel;
+
     reply('ok: '+username);
     
-    process_message(username, 'web', text);
+    process_message(channel, username, 'web', text);
   }
 });
 
@@ -123,7 +134,7 @@ function replace_slack_entities(text, replace_callback) {
 }
 
 
-function process_message(username, method, text) {
+function process_message(channel, username, method, text) {
   var irc_nick;
   if(method == 'slack') {
     irc_nick = "["+username+"]";
@@ -135,22 +146,25 @@ function process_message(username, method, text) {
   // Connect and add to the queue
   if(clients[username] == null && queued[username] == null) {
     if(queued[username] == null) {
-      queued[username] = [];
+      queued[username] = new queue();
     }
-    queued[username].push(text);
+    queued[username].push(channel, text);
 
     connect_to_irc(username, irc_nick, method);
-  } else if(queued[username] && queued[username].length > 0) {
+  } else if(queued[username] && queued[username].length() > 0) {
+    // console.log("Current messages in queue: "+queued[username].length());
+    // console.log(queued[username]);
+
     // There is already a client and something in the queue, which means
     // the bot is currently connecting. Keep adding to the queue
-    queued[username].push(text);
+    queued[username].push(channel, text);
   } else {
     // Bot is already connected
     var match;
     if(match=text.match(/^\/nick (.+)/)) {
       clients[username].send("NICK", match[1]);
     } else {
-      clients[username].say(config.irc.channel, text);
+      clients[username].say(channel, text);
     }
 
     clearTimeout(timers[username]);
@@ -169,23 +183,24 @@ function connect_to_irc(username, irc_nick, method) {
     debug: true,
     userName: method+'user',
     realName: username+" via "+method+"-irc-gateway",
-    channels: [config.irc.channel]
+    channels: config.channels.map(function(c){ return c.irc; })
   });
 
   clients[username].connect(function() {
-    console.log("Connecting to IRC...");
+    console.log("Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
   });
 
   clients[username].addListener('join', function(channel, nick, message){
     console.log("[join] "+nick+" joined "+channel+" (me: "+clients[username].nick+")");
     if(nick == clients[username].nick) {
-      console.log(irc_nick+ " successfully connected! (joined as "+nick+")");
-      // Now send the queued messages
+      console.log(irc_nick+ " successfully joined "+channel+"! (joined as "+nick+")");
+
+      // Now send the queued messages for the channel
       if(queued[username]) {
-        for(var i in queued[username]) {
-          clients[username].say(config.irc.channel, queued[username][i]);
+        var text;
+        while(text = queued[username].pop(channel)) {
+          clients[username].say(channel, text);
         }
-        queued[username] = null;
       }
         
       // Set a timer to disconnect the bot after a while
