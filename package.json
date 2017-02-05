@@ -2,7 +2,10 @@
   "name": "slack-irc-gateway",
   "version": "0.1.0",
   "description": "A bridge to allow Slack users to appear as native IRC users",
-  "keywords": ["irc","slack"],
+  "keywords": [
+    "irc",
+    "slack"
+  ],
   "author": {
     "name": "Aaron Parecki",
     "url": "http://aaronparecki.com/"
@@ -14,10 +17,11 @@
   },
   "dependencies": {
     "async": "^1.4.0",
-    "html-entities": "*",
     "hapi": "^8.8.1",
+    "html-entities": "*",
     "irc": "*",
     "irc-colors": "^1.2.0",
+    "punycode": "^2.1.0",
     "request": "^2.60.0"
   },
   "main": "gateway.js"

@@ -4,6 +4,7 @@ var request = require('request');
 var async = require('async');
 var Entities = require('html-entities').AllHtmlEntities;
 var entities = new Entities();
+var emoji = require('./emoji');
 var queue = require('./queue').queue;
 
 var config   = require(__dirname + '/config.json');
@@ -105,7 +106,9 @@ function slack_api(method, params, callback) {
 function replace_slack_entities(text, replace_callback) {
   text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)\\|([^>]+)>','g'), '$2');
   text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)>','g'), '$1');
-    
+  
+  text = emoji.slack_to_unicode(text);
+
   if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
     async.map(matches, function(entity, callback){
       var match = entity.match(/<([@#])([UC][^>\|]+)(?:\|([^\|]+))?>/);
