@@ -50,7 +50,6 @@ server.route({
     // the messages from IRC users and those from other things SlackBot does.    
     if(username != 'slackbot' && irc_channel) {
       // Replace Slack refs with IRC refs
-      console.log("INPUT: #"+channel+" ["+username+"] "+text);
       replace_slack_entities(text, function(text) {
         console.log("INPUT: #"+channel+" ["+username+"] "+text);
         process_message(irc_channel, username, 'slack', text);
@@ -145,9 +144,8 @@ function process_message(channel, username, method, text) {
     irc_nick = username;
   }
 
-  // No client, and nothing in the queue
   // Connect and add to the queue
-  if(clients[method+":"+username] == null && queued[method+":"+username] == null) {
+  if(clients[method+":"+username] == null) {
     if(queued[method+":"+username] == null) {
       queued[method+":"+username] = new queue();
     }
@@ -159,7 +157,7 @@ function process_message(channel, username, method, text) {
     // the bot is currently connecting. Keep adding to the queue
     queued[method+":"+username].push(channel, text);
   } else {
-    // Bot is already connected
+    // Queue is empty, so bot is already connected
     var match;
     if(match=text.match(/^\/nick (.+)/)) {
       clients[method+":"+username].send("NICK", match[1]);
