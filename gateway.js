@@ -184,6 +184,16 @@ function connect_to_irc(username, irc_nick, method) {
     channels: config.channels.map(function(c){ return c.irc; })
   });
 
+  // Set a timer to disconnect the bot after a while
+  timers[method+":"+username] = setTimeout(function(){
+    console.log("[timeout] ("+method+"/"+username+") timed out");
+    if(clients[method+":"+username]) {
+      clients[method+":"+username].disconnect('Slack user timed out');
+    }
+    clients[method+":"+username] = null;
+    timers[method+":"+username] = null;
+  }, config.irc.disconnect_timeout);
+
   clients[method+":"+username].connect(function() {
     console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
   });
@@ -200,16 +210,6 @@ function connect_to_irc(username, irc_nick, method) {
           clients[method+":"+username].say(channel, text);
         }
       }
-        
-      // Set a timer to disconnect the bot after a while
-      timers[method+":"+username] = setTimeout(function(){
-        console.log("[timeout] ("+method+"/"+username+") timed out");
-        if(clients[method+":"+username]) {
-          clients[method+":"+username].disconnect('Slack user timed out');
-        }
-        clients[method+":"+username] = null;
-        timers[method+":"+username] = null;
-      }, config.irc.disconnect_timeout);
     }
   });
 
