@@ -23,7 +23,7 @@ server.route({
   method: 'GET',
   path: '/',
   handler: function (request, reply) {
-    reply('Hello world');
+    reply('This is a Slack/IRC Gateway. Source code here: https://github.com/aaronpk/Slack-IRC-Gateway');
   }
 });
 
@@ -178,20 +178,20 @@ function process_message(channel, username, method, text) {
 function connect_to_irc(username, irc_nick, method) {
   clients[method+":"+username] = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
-    debug: true,
+    debug: false,
     userName: method+'user',
     realName: username+" via "+method+"-irc-gateway",
     channels: config.channels.map(function(c){ return c.irc; })
   });
 
   clients[method+":"+username].connect(function() {
-    console.log("Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
+    console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
   });
 
   clients[method+":"+username].addListener('join', function(channel, nick, message){
     console.log("[join] "+nick+" joined "+channel+" (me: "+clients[method+":"+username].nick+")");
     if(nick == clients[method+":"+username].nick) {
-      console.log(irc_nick+ " successfully joined "+channel+"! (joined as "+nick+")");
+      console.log("[debug] "+irc_nick+" successfully joined "+channel+"! (joined as "+nick+")");
 
       // Now send the queued messages for the channel
       if(queued[method+":"+username]) {
@@ -203,10 +203,21 @@ function connect_to_irc(username, irc_nick, method) {
         
       // Set a timer to disconnect the bot after a while
       timers[method+":"+username] = setTimeout(function(){
-        clients[method+":"+username].disconnect('Slack user timed out');
+        console.log("[timeout] ("+method+"/"+username+") timed out");
+        if(clients[method+":"+username]) {
+          clients[method+":"+username].disconnect('Slack user timed out');
+        }
         clients[method+":"+username] = null;
         timers[method+":"+username] = null;
       }, config.irc.disconnect_timeout);
     }
   });
+
+  clients[method+":"+username].addListener('error', function(message) {
+    console.log("[error] ("+method+"/"+username+") ", message);
+  });
+
+  clients[method+":"+username].addListener('pm', function(from, message) {
+    clients[method+":"+username].say(from, "[error] Sorry, private messages to users of the "+method+" gateway are not supported.");
+  })
 }
