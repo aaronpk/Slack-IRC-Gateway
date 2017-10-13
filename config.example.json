@@ -8,18 +8,24 @@
   "channels": [
     {
       "slack": "indieweb",
+      "slack_token": "XXXXXXXXXXXX",
       "irc": "#indieweb"
     },
     {
       "slack": "dev",
+      "slack_token": "XXXXXXXXXXXX",
       "irc": "#indieweb-dev"
     },
     {
       "slack": "chat",
+      "slack_token": "XXXXXXXXXXXX",
       "irc": "#indieweb-chat"
     }
   ],
   "slack": {
+    "token": "xxxx"
+  },
+  "web": {
     "token": "xxxx"
   }
 }

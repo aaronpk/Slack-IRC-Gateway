@@ -35,16 +35,24 @@ server.route({
     var username = req.payload.user_name.replace(".","_");
     var text = req.payload.text;
 
-    // Acknowledge the Slack webhook immediately
-    reply('ok: '+username);
-
     // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
     var irc_channel = false;
+    var expected_token = false;
     for(var i in config.channels) {
       if(channel == config.channels[i].slack) {
         irc_channel = config.channels[i].irc;
+        expected_token = config.channels[i].slack_token;
       }
     }
+
+    // Verify the request came from Slack
+    if(!expected_token || req.payload.token != expected_token) {
+      reply('unauthorized');
+      return;
+    }
+
+    // Acknowledge the Slack webhook immediately
+    reply('ok: '+username);
 
     if(irc_channel) {
       // If there are any files in the image, make them public and process this as an image instead
@@ -108,13 +116,17 @@ server.route({
   method: 'POST',
   path: '/web/input',
   handler: function (request, reply) {
-    var username = request.payload.user_name;
-    var text = request.payload.text;
-    var channel = request.payload.channel;
+    if(request.payload.token != config.web.token) {
+      reply('unauthorized');
+    } else {
+      var username = request.payload.user_name;
+      var text = request.payload.text;
+      var channel = request.payload.channel;
 
-    reply('ok: '+username);
-    
-    process_message(channel, username, 'web', text);
+      reply('ok: '+username);
+      
+      process_message(channel, username, 'web', text);
+    }
   }
 });
 
@@ -123,13 +135,18 @@ server.route({
   method: 'POST',
   path: '/web/join',
   handler: function (request, reply) {
-    var username = request.payload.user_name;
-    
-    if(clients["web:"+username] == null) {
-      connect_to_irc(username, username, 'web');
-      reply('connecting');
+    if(request.payload.token != config.web.token) {
+      reply('unauthorized');
     } else {
-      reply('connected');
+      var username = request.payload.user_name;
+      
+      if(clients["web:"+username] == null) {
+        connect_to_irc(username, username, 'web');
+        // Reply with a session token that will be required with every message to /web/input
+        reply('connecting');
+      } else {
+        reply('connected');
+      }
     }
   }
 });
