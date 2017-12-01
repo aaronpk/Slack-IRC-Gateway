@@ -10,6 +10,7 @@ var queue = require('./queue').queue;
 var config   = require(__dirname + '/config.json');
 
 var clients = {}
+var sessions = {}
 var queued = {}
 var timers = {}
 
@@ -119,13 +120,19 @@ server.route({
     if(request.payload.token != config.web.token) {
       reply('unauthorized');
     } else {
-      var username = request.payload.user_name;
-      var text = request.payload.text;
-      var channel = request.payload.channel;
+      if(sessions[request.payload.session]) {
+        var session = sessions[request.payload.session];
 
-      reply('ok: '+username);
-      
-      process_message(channel, username, 'web', text);
+        var username = session.username;
+        var text = request.payload.text;
+        var channel = request.payload.channel;
+
+        reply({username: username});
+        
+        process_message(channel, username, 'web', text);
+      } else {
+        reply({error: 'invalid_session'})
+      }
     }
   }
 });
@@ -143,9 +150,26 @@ server.route({
       if(clients["web:"+username] == null) {
         connect_to_irc(username, username, 'web');
         // Reply with a session token that will be required with every message to /web/input
-        reply('connecting');
+        reply({"status": "connecting", "session": clients["web:"+username].websession});
       } else {
-        reply('connected');
+        reply({"status":"connected", "session": clients["web:"+username].websession});
+      }
+    }
+  }
+});
+
+server.route({
+  method: 'POST',
+  path: '/web/session',
+  handler: function (request, reply) {
+    if(request.payload.token != config.web.token) {
+      reply('unauthorized');
+    } else {
+      if(sessions[request.payload.session]) {
+        var data = sessions[request.payload.session];
+        reply({username: data.username});
+      } else {
+        reply({});
       }
     }
   }
@@ -246,6 +270,9 @@ function connect_to_irc(username, irc_nick, method) {
     realName: username+" via "+method+"-irc-gateway",
     channels: config.channels.map(function(c){ return c.irc; })
   });
+
+  clients[method+":"+username].websession = Math.random().toString(36);
+  sessions[clients[method+":"+username].websession] = {method: method, username: username};
 
   // Set a timer to disconnect the bot after a while
   timers[method+":"+username] = setTimeout(function(){
