@@ -201,7 +201,13 @@ function slack_user_id_to_username(uid, callback) {
     callback(null, username_cache[uid]);
   } else {
     slack_api("users.info", {user: uid}, function(err, data){
-      var username = data.user.profile.display_name_normalized.replace(/[^a-zA-Z0-9_]/, '_')
+      var name;
+      if(data.user.profile.display_name_normalized) {
+        name = data.user.profile.display_name_normalized;
+      } else {
+        name = data.user.name; // fallback for users who haven't set a display name
+      }
+      var username = name.replace(/[^a-zA-Z0-9_]/, '_');
       console.log("Username: "+uid+" => "+username);
       username_cache[uid] = username;
       callback(err, username);
