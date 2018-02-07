@@ -227,7 +227,7 @@ function replace_slack_entities(text, replace_callback) {
       //console.log("Processing "+match[2]);
       if(match[1] == "@"){
         slack_user_id_to_username(match[2], function(err, username){
-          callback(err, {match: entity, replace: username});
+          callback(err, {match: entity, replace: "["+username+"]"});
         });
       } else {
         slack_api("channels.info", {channel: match[2]}, function(err, data){
