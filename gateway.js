@@ -32,9 +32,17 @@ server.route({
   method: 'POST',
   path: '/gateway/input',
   handler: function (req, reply) {
+
+    // Don't echo things that slackbot says in Slack on behalf of IRC users.
+    // TODO: Investigate whether req.payload.bot_id can be used to filter these instead.
+    // Right now this ignores everything Slackbot does, even stuff it does on its own.
+    if(req.payload.user_id == 'USLACKBOT') {
+      return;
+    }
+  
     var channel = req.payload.channel_name;
     var text = req.payload.text;
-
+    
     // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
     var irc_channel = false;
     var expected_token = false;
@@ -99,16 +107,11 @@ server.route({
               });
             });
           } else {
-            // Don't echo things that slackbot says in Slack on behalf of IRC users.
-            // Unfortunately there's nothing in the webhook payload that distinguishes
-            // the messages from IRC users and those from other things SlackBot does.    
-            if(username != 'slackbot') {
-              // Replace Slack refs with IRC refs
-              replace_slack_entities(text, function(text) {
-                console.log("INPUT: #"+channel+" ["+username+"] "+text);
-                process_message(irc_channel, username, 'slack', text);
-              });
-            }
+            // Replace Slack refs with IRC refs
+            replace_slack_entities(text, function(text) {
+              console.log("INPUT: #"+channel+" ["+username+"] "+text);
+              process_message(irc_channel, username, 'slack', text);
+            });
           }
         }
       });
@@ -322,10 +325,15 @@ function connect_to_irc(username, irc_nick, method) {
 
       // Now send the queued messages for the channel
       if(queued[method+":"+username]) {
-        var text;
-        while(text = queued[method+":"+username].pop(channel)) {
-          clients[method+":"+username].say(channel, text);
-        }
+        // Delay to give Loqi time to +v
+        (function(method, username, channel){
+          setTimeout(function(){
+            var text;
+            while(text = queued[method+":"+username].pop(channel)) {
+              clients[method+":"+username].say(channel, text);
+            }
+          }, 500);
+        })(method, username, channel);
       }
     }
   });
