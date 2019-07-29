@@ -234,8 +234,9 @@ function replace_slack_entities(text, replace_callback) {
         });
       } else {
         slack_api("channels.info", {channel: match[2]}, function(err, data){
-          //console.log(entity+" => "+data.channel.name);
-          callback(err, {match: entity, replace: "#"+data.channel.name});
+          // If this channel matches one in the config, convert to the IRC name
+          var irc_channel = irc_channel_from_slack_channel(data.channel.name);
+          callback(err, {match: entity, replace: irc_channel});
         });
       }
     }, function(err, results) {
@@ -250,6 +251,15 @@ function replace_slack_entities(text, replace_callback) {
   }
 }
 
+function irc_channel_from_slack_channel(name) {
+  var irc_channel = '#'+name;
+  for(var i in config.channels) {
+    if(name == config.channels[i].slack) {
+      irc_channel = config.channels[i].irc;
+    }
+  }
+  return irc_channel;
+}
 
 function process_message(channel, username, method, text) {
   var irc_nick;
