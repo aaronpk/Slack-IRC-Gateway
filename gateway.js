@@ -7,12 +7,26 @@ var entities = new Entities();
 var emoji = require('./emoji');
 var queue = require('./queue').queue;
 
+// Provide a mechanism to allow project-specific text replacements
+const fs = require('fs');
+var replacements;
+try {
+  if(fs.existsSync("./replacements.js")) {
+    replacements = require("./replacements");
+  }
+} catch(err) {
+}
+
+
 var config   = require(__dirname + '/config.json');
 
 var clients = {}
 var sessions = {}
 var queued = {}
 var timers = {}
+
+var ircToSlack;
+var ircUsers = [];
 
 var server = new Hapi.Server();
 server.connection({
@@ -39,10 +53,10 @@ server.route({
     if(req.payload.user_id == 'USLACKBOT') {
       return;
     }
-  
+
     var channel = req.payload.channel_name;
     var text = req.payload.text;
-    
+
     // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
     var irc_channel = false;
     var expected_token = false;
@@ -136,7 +150,7 @@ server.route({
         var channel = request.payload.channel;
 
         reply({username: username});
-        
+
         process_message(channel, username, 'web', text);
       } else {
         reply({error: 'invalid_session'})
@@ -154,7 +168,7 @@ server.route({
       reply('unauthorized');
     } else {
       var username = request.payload.user_name;
-      
+
       if(clients["web:"+username] == null) {
         connect_to_irc(username, username, 'web');
         // Reply with a session token that will be required with every message to /web/input
@@ -186,6 +200,113 @@ server.route({
 server.start(function () {
   console.log('Server running at:', server.info.uri);
 });
+
+var ircToSlackQueue = [];
+
+// Create an IRC bot that joins all the channels to route messages to Slack
+ircToSlack = new irc.Client(config.irc.hostname, config.irc.gateway_nick, {
+  autoConnect: false,
+  debug: false,
+  userName: 'IRCtoSlackGateway',
+  realName: "IRC to Slack Gateway",
+  channels: config.channels.map(function(c){ return c.irc; })
+});
+ircToSlack.connect(function(){
+  console.log("[connecting] Connecting Gateway user to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
+});
+ircToSlack.addListener('join', function(channel, nick, message){
+  console.log('[join] Successfully joined '+channel);
+});
+ircToSlack.addListener('ctcp-privmsg', function(nick, channel, message, event){
+  process_irc_to_slack(nick, channel, message.replace(/[\x00-\x1F\x7F-\x9F]/g,'').replace(/^ACTION /,''), 'message', event);
+});
+ircToSlack.addListener('message', function(nick, channel, message, event) {
+  process_irc_to_slack(nick, channel, message, 'ctcp', event);
+});
+
+var slack_queue = [];
+function send_to_slack_from_queue() {
+  var payload = slack_queue.shift();
+  if(payload) {
+    request.post(config.slack.hook, {
+      form: {
+        payload: JSON.stringify(payload)
+      }
+    }, function(err,response,body){
+      setTimeout(send_to_slack_from_queue, 1000);
+    });
+  } else {
+    setTimeout(send_to_slack_from_queue, 1000);
+  }
+}
+send_to_slack_from_queue();
+
+function process_irc_to_slack(nick, channel, message, type, event) {
+  //console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
+
+  // Ignore IRC messages from this Slack gateway
+  if(event.user == '~slackuser') {
+    return;
+  }
+
+  // Convert IRC text to Slack text
+
+  // Strip IRC control chars
+  message = message.replace(/\x03\d{1,2}/g, '').replace(/\x03/, '');
+
+  // Convert mentions of slack usernames "[aaronpk]" to slack format "@aaronpk"
+  message = message.replace(/\[([a-zA-Z0-9_-]+)\]/, '@$1');
+
+  if(replacements) {
+    message = replacements.irc_to_slack(message, channel);
+  }
+
+  // Route the message to the appropriate Slack channel
+  // Slack API rate limits 1/sec, so add these to a queue which is processed separately
+  var ch = slack_channel_from_irc_channel(channel);
+  if(ch) {
+    var icon_url = false;
+    var profile;
+
+    if(profile=profile_for_irc_nick(nick)) {
+      if(profile.photo) {
+        icon_url = profile.photo[0];
+      }
+    }
+
+    slack_queue.push({
+      text: message,
+      username: nick,
+      channel: ch,
+      icon_url: icon_url
+    });
+  }
+
+}
+ircToSlack.addListener('pm', function(from, message){
+  ircToSlack.say(from, "The source code of this bot is available here: https://github.com/aaronpk/slack-irc-gateway");
+});
+
+
+// Load IRC users from file to variable every 5 minutes
+function reload_irc_users_from_file() {
+  if(fs.existsSync("./data/irc-users.json")) {
+    ircUsers = JSON.parse(fs.readFileSync('./data/irc-users.json'));
+  }
+}
+reload_irc_users_from_file();
+setInterval(reload_irc_users_from_file, 60*5);
+
+function profile_for_irc_nick(nick) {
+  for(var i in ircUsers) {
+    if(nick == ircUsers[i].properties.nickname) {
+      return ircUsers[i].properties;
+    }
+  }
+  return null;
+}
+
+
 
 function slack_api(method, params, callback) {
   params['token'] = config.slack.token;
@@ -221,7 +342,7 @@ function slack_user_id_to_username(uid, callback) {
 function replace_slack_entities(text, replace_callback) {
   text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)\\|([^>]+)>','g'), '$2');
   text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)>','g'), '$1');
-  
+
   text = emoji.slack_to_unicode(text);
 
   if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
@@ -259,6 +380,16 @@ function irc_channel_from_slack_channel(name) {
     }
   }
   return irc_channel;
+}
+
+function slack_channel_from_irc_channel(name) {
+  var slack_channel = false;
+  for(var i in config.channels) {
+    if(name == config.channels[i].irc) {
+      slack_channel = '#'+config.channels[i].slack;
+    }
+  }
+  return slack_channel;
 }
 
 function process_message(channel, username, method, text) {
