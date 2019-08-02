@@ -3,7 +3,8 @@
   "host": "127.0.0.1",
   "irc": {
     "hostname": "irc.freenode.net",
-    "disconnect_timeout": 600000
+    "disconnect_timeout": 600000,
+    "gateway_nick": "SlackGateway"
   },
   "channels": [
     {
@@ -23,7 +24,8 @@
     }
   ],
   "slack": {
-    "token": "xxxx"
+    "token": "xxxx",
+    "hook": "https://hooks.slack.com/services/XXX/XXX/XXX"
   },
   "web": {
     "token": "xxxx"
