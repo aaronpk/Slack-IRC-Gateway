@@ -207,7 +207,7 @@ var ircToSlackQueue = [];
 ircToSlack = new irc.Client(config.irc.hostname, config.irc.gateway_nick, {
   autoConnect: false,
   debug: false,
-  userName: 'IRCtoSlackGateway',
+  userName: 'IRCSlack',
   realName: "IRC to Slack Gateway",
   channels: config.channels.map(function(c){ return c.irc; })
 });
