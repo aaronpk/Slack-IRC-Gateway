@@ -291,7 +291,12 @@ ircToSlack.addListener('pm', function(from, message){
 // Load IRC users from file to variable every 5 minutes
 function reload_irc_users_from_file() {
   if(fs.existsSync("./data/irc-users.json")) {
-    ircUsers = JSON.parse(fs.readFileSync('./data/irc-users.json'));
+    try {
+      tmpircUsers = JSON.parse(fs.readFileSync('./data/irc-users.json'));
+      ircUsers = tmpircUsers;
+    } catch(e) {
+      console.log("ERROR LOADING USERS FROM FILE");
+    }
   }
 }
 reload_irc_users_from_file();
