@@ -254,6 +254,16 @@ function process_irc_to_slack(nick, channel, message, type, event) {
   // Strip IRC control chars
   message = message.replace(/\x03\d{1,2}/g, '').replace(/\x03/, '');
 
+  // Convert mentions of slack usernames "[aaronpk]" to native slack IDs if we know them
+  message = message.replace(/\[([a-zA-Z0-9_-]+)\]/g, function(matched, nickname, index){
+    var slack_user_id = slack_username_to_id(nickname);
+    if(slack_user_id) {
+      return '<@'+slack_username_to_id(nickname)+'>';
+    } else {
+      return matched;
+    }
+  });
+
   // Convert mentions of slack usernames "[aaronpk]" to slack format "@aaronpk"
   message = message.replace(/\[([a-zA-Z0-9_-]+)\]/, '@$1');
 
@@ -319,6 +329,7 @@ function slack_api(method, params, callback) {
 }
 
 var username_cache = {};
+var userid_cache = {};
 
 function slack_user_id_to_username(uid, callback) {
   if(username_cache[uid]) {
@@ -334,8 +345,17 @@ function slack_user_id_to_username(uid, callback) {
       var username = name.replace(/[^a-zA-Z0-9_]/, '_');
       console.log("Username: "+uid+" => "+username);
       username_cache[uid] = username;
+      userid_cache[username] = uid;
       callback(err, username);
     });
+  }
+}
+
+function slack_username_to_id(username) {
+  if(userid_cache[username.toLowerCase()]) {
+    return userid_cache[username.toLowerCase()];
+  } else {
+    return false;
   }
 }
 
