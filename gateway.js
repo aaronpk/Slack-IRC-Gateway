@@ -348,6 +348,9 @@ function slack_user_id_to_username(uid, callback) {
         name = data.user.name; // fallback for users who haven't set a display name
       }
       var username = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/, '_');
+      if(username.length > 14) {
+        username = username.substring(0,14);
+      }
       console.log("Username: "+uid+" => "+username);
       username_cache[uid] = username;
       userid_cache[username] = uid;
@@ -420,7 +423,7 @@ function slack_channel_from_irc_channel(name) {
 function process_message(channel, username, method, text) {
   var irc_nick;
   if(method == 'slack') {
-    irc_nick = "["+username.replace(".","_")+"]";
+    irc_nick = "["+username+"]";
   } else {
     irc_nick = username;
   }
