@@ -47,16 +47,20 @@ server.route({
   path: '/gateway/input',
   handler: function (req, reply) {
 
-    // Ignore bot messages
-    if(req.payload.event.subtype == 'bot_message') {
-      reply('ignored bot message');
-      return;
-    }
-
     // Respond to the Slack Events API challenge
     if(req.payload.type == "url_verification") {
       reply({challenge: req.payload.challenge});
       console.log("Event API Token: "+req.payload.token);
+      return;
+    }
+
+    if(!req.payload.event) {
+      return;
+    }
+
+    // Ignore bot messages
+    if(req.payload.event.subtype == 'bot_message') {
+      reply('ignored bot message');
       return;
     }
 
