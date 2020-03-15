@@ -97,11 +97,13 @@ server.route({
 
         switch(event.type) {
           case "message":
-            // Replace Slack refs with IRC refs
-            replace_slack_entities(event.text, function(text) {
-              console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] "+text);
-              process_message(irc_channel, username, 'slack', text);
-            });
+            if(event.text) {
+              // Replace Slack refs with IRC refs
+              replace_slack_entities(event.text, function(text) {
+                console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] "+text);
+                process_message(irc_channel, username, 'slack', text);
+              });
+            }
 
             // If there are any files in the image, make them public and send the image URL too
             if(event.files) {
