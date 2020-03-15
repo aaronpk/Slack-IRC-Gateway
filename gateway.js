@@ -47,91 +47,87 @@ server.route({
   path: '/gateway/input',
   handler: function (req, reply) {
 
-    // Don't echo things that slackbot says in Slack on behalf of IRC users.
-    // TODO: Investigate whether req.payload.bot_id can be used to filter these instead.
-    // Right now this ignores everything Slackbot does, even stuff it does on its own.
-    if(req.payload.user_id == 'USLACKBOT') {
+    // Ignore bot messages
+    if(req.payload.event.subtype == 'bot_message') {
+      reply('ignored bot message');
       return;
     }
 
-    var channel = req.payload.channel_name;
-    var text = req.payload.text;
-
-    // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
-    var irc_channel = false;
-    var expected_token = false;
-    for(var i in config.channels) {
-      if(channel == config.channels[i].slack) {
-        irc_channel = config.channels[i].irc;
-        expected_token = config.channels[i].slack_token;
-      }
+    // Respond to the Slack Events API challenge
+    if(req.payload.type == "url_verification") {
+      reply({challenge: req.payload.challenge});
+      console.log("Event API Token: "+req.payload.token);
+      return;
     }
 
     // Verify the request came from Slack
-    if(!expected_token || req.payload.token != expected_token) {
+    if(config.slack.event_api_token != req.payload.token) {
       reply('unauthorized');
       return;
     }
 
+    var event = req.payload.event;
+
+    // console.log(event);
+
+    // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
+    var irc_channel = false;
+    for(var i in config.channels) {
+      if(event.channel == config.channels[i].slack_id) {
+        irc_channel = config.channels[i].irc;
+      }
+    }
+
+    if(!irc_channel) {
+      reply('no irc channel');
+      return;
+    }
+
     // Acknowledge the Slack webhook immediately
-    reply('ok: '+req.payload.user_name);
+    reply('ok: '+event.client_msg_id);
 
-    if(irc_channel) {
-      slack_user_id_to_username(req.payload.user_id, function(err, username){
-        if(err) {
-          console.log("Error looking up user ID: "+req.payload.user_id);
-        } else {
-          // If there are any files in the image, make them public and process this as an image instead
-          if(match=text.match(/uploaded a file:.+files\/[^\/]+\/(F[^\/]+)/)) {
-            slack_api("files.sharedPublicURL", {
-              file: match[1]
-            }, function(err,data){
-              // The only "public" aspect that Slack returns is a web page that embeds the image.
-              // Parse the web page looking for the img tag that contains the actual image URL.
-              request.get(data.file.permalink_public, function(err, response, body) {
-                // http://xkcd.com/208/
-                if(imgmatch=body.match(/img src="([^"]+pub_secret=[^"]+)"/)) {
-                  var file_url = imgmatch[1] + "&name=" + data.file.name;
-                  console.log("Found public file URL: "+file_url);
+    slack_user_id_to_username(event.user, function(err, username){
+      if(err) {
+        console.log("Error looking up user ID: "+event.user);
+      } else {
 
-                  // If the user enters a title for the image that's different from the filename,
-                  // include that in the message sent to IRC.
-                  if(data.file.title != data.file.name) {
-                    text = data.file.title + " " + file_url;
-                  } else {
-                    text = file_url;
-                  }
-
-                  // If the file has a comment, include that after the image.
-                  // (may contain slack entities that need replacing)
-                  if(data.file.initial_comment) {
-                    text += " " + data.file.initial_comment.comment;
-                    replace_slack_entities(text, function(text) {
-                      console.log("INPUT (file with comment): #"+channel+" ["+username+"] "+text);
-                      process_message(irc_channel, username, 'slack', text);
-                    });
-                  } else {
-                    console.log("INPUT (file with no comment): #"+channel+" ["+username+"] "+text);
-                    process_message(irc_channel, username, 'slack', text);
-                  }
-
-                } else {
-                  console.log("[error] Could not find image URL in the public file web page");
-                }
-              });
-            });
-          } else {
+        switch(event.type) {
+          case "message":
             // Replace Slack refs with IRC refs
-            replace_slack_entities(text, function(text) {
-              console.log("INPUT: #"+channel+" ["+username+"] "+text);
+            replace_slack_entities(event.text, function(text) {
+              console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] "+text);
               process_message(irc_channel, username, 'slack', text);
             });
-          }
+
+            // If there are any files in the image, make them public and send the image URL too
+            if(event.files) {
+              for(var i in event.files) {
+                var file = event.files[i];
+                slack_api("files.sharedPublicURL", {
+                  file: file.id
+                }, function(err, data){
+                  if(!err) {
+                    var file_url = data.file.permalink_public;
+                    console.log("File made public: "+file_url);
+                    // The only "public" aspect that Slack returns is a web page that embeds the image.
+                    // Parse the web page looking for the img tag that contains the actual image URL.
+                    request.get(data.file.permalink_public, function(err, response, body) {
+                      if(imgmatch=body.match(/img src="([^"]+pub_secret=[^"]+)"/)) {
+                        var file_url = imgmatch[1];
+                        process_message(irc_channel, username, 'slack', file_url);
+                      }
+                    });
+
+                  }
+
+                });
+              }
+            }
+            break;
         }
-      });
-    } else {
-      // No IRC channel configured for this Slack channel
-    }
+      }
+    });
+
   }
 });
 
@@ -242,7 +238,7 @@ function send_to_slack_from_queue() {
 send_to_slack_from_queue();
 
 function process_irc_to_slack(nick, channel, message, type, event) {
-  //console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
+  console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
 
   // Ignore IRC messages from this Slack gateway
   if(event.user == '~slackuser') {
@@ -341,21 +337,25 @@ function slack_user_id_to_username(uid, callback) {
     callback(null, username_cache[uid]);
   } else {
     slack_api("users.info", {user: uid}, function(err, data){
-      var name;
-      if(data.user.profile.display_name_normalized) {
-        name = data.user.profile.display_name_normalized;
+      if(err) {
+        console.error("Error getting user info", err);
       } else {
-        name = data.user.name; // fallback for users who haven't set a display name
+        var name;
+        if(data.user.profile.display_name_normalized) {
+          name = data.user.profile.display_name_normalized;
+        } else {
+          name = data.user.name; // fallback for users who haven't set a display name
+        }
+        // Turn a Slack name into IRC-safe chars.
+        // Use only alphanumeric and underscore,
+        // collapse multiple underscores,
+        // cap at 14 chars (IRC limit is 16, we add [] later)
+        var username = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/, '_').substring(0,14);
+        console.log("Username: "+uid+" => "+username);
+        username_cache[uid] = username;
+        userid_cache[username] = uid;
+        callback(err, username);
       }
-      // Turn a Slack name into IRC-safe chars.
-      // Use only alphanumeric and underscore,
-      // collapse multiple underscores,
-      // cap at 14 chars (IRC limit is 16, we add [] later)
-      var username = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/, '_').substring(0,14);
-      console.log("Username: "+uid+" => "+username);
-      username_cache[uid] = username;
-      userid_cache[username] = uid;
-      callback(err, username);
     });
   }
 }
@@ -415,7 +415,7 @@ function slack_channel_from_irc_channel(name) {
   var slack_channel = false;
   for(var i in config.channels) {
     if(name == config.channels[i].irc) {
-      slack_channel = '#'+config.channels[i].slack;
+      slack_channel = '#'+config.channels[i].slack_name;
     }
   }
   return slack_channel;

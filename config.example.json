@@ -8,23 +8,24 @@
   },
   "channels": [
     {
-      "slack": "indieweb",
-      "slack_token": "XXXXXXXXXXXX",
+      "slack_id": "C00000000",
+      "slack_name": "indieweb",
       "irc": "#indieweb"
     },
     {
-      "slack": "dev",
-      "slack_token": "XXXXXXXXXXXX",
+      "slack_id": "C00000000",
+      "slack_name": "dev",
       "irc": "#indieweb-dev"
     },
     {
-      "slack": "chat",
-      "slack_token": "XXXXXXXXXXXX",
+      "slack_id": "C00000000",
+      "slack_name": "chat",
       "irc": "#indieweb-chat"
     }
   ],
   "slack": {
-    "token": "xxxx",
+    "event_api_token": "bltzz3FzVx3etR6nWywSsoHR",
+    "token": "xoxp-xxxx",
     "hook": "https://hooks.slack.com/services/XXX/XXX/XXX"
   },
   "web": {
