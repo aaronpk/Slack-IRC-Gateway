@@ -266,9 +266,6 @@ function process_irc_to_slack(nick, channel, message, type, event) {
     }
   });
 
-  // Convert mentions of slack usernames "[aaronpk]" to slack format "@aaronpk"
-  message = message.replace(/\[([a-zA-Z0-9_-]+)\]/, '@$1');
-
   if(replacements) {
     message = replacements.irc_to_slack(message, channel);
   }
