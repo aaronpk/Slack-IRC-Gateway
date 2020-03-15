@@ -14,7 +14,7 @@ Setup
 * Enable Event Subscriptions on the app
 * Set the Request URL to the location of where you deployed this script. It should be something like http://example.com:8080/gateway/input
   * Make sure you deploy the app before setting this URL, as Slack will ping it to test it when you enter the URL
-  * Watch the logs and
+  * Watch the logs and copy the "Event API Token" into your config
 * Under "Subscribe to events on behalf of users", add the `message.channels` event
 * Under "OAuth & Permissions", add the following User Token Scopes
   * `channels:history`
