@@ -58,9 +58,9 @@ server.route({
       return;
     }
 
-    // Ignore bot messages
-    if(req.payload.event.subtype == 'bot_message') {
-      reply('ignored bot message');
+    // Ignore everything except regular text messages and "/me"
+    if(!(req.payload.event.subtype == null || req.payload.event.subtype == "me_message")) {
+      reply('ignoring');
       return;
     }
 
@@ -101,6 +101,12 @@ server.route({
               // Replace Slack refs with IRC refs
               replace_slack_entities(event.text, function(text) {
                 console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] "+text);
+                if(event.subtype == "me_message") {
+                  text = "/me "+text;
+                }
+                if(event.thread_ts) {
+                  text = "↩️ "+text;
+                }
                 process_message(irc_channel, username, 'slack', text);
               });
             }
@@ -343,6 +349,10 @@ function slack_user_id_to_username(uid, callback) {
       if(err) {
         console.error("Error getting user info", err);
       } else {
+        if(!data.user) {
+          console.error("No user data found", data);
+          return;
+        }
         var name;
         if(data.user.profile.display_name_normalized) {
           name = data.user.profile.display_name_normalized;
