@@ -272,6 +272,12 @@ function process_irc_to_slack(nick, channel, message, type, event) {
     }
   });
 
+  // Convert mentions of channel names to the slack equivalents <#C000XX0XX>
+  for(var i in config.channels) {
+    var rxp = new RegExp('([^a-z\-]|^)'+config.channels[i].irc+'([^a-z\-]|$)', "g");
+    message = message.replace(rxp, "$1<#"+config.channels[i].slack_id+">$2")
+  }
+
   if(replacements) {
     message = replacements.irc_to_slack(message, channel);
   }
@@ -396,11 +402,16 @@ function replace_slack_entities(text, replace_callback) {
           callback(err, {match: entity, replace: "["+username+"]"});
         });
       } else {
-        slack_api("channels.info", {channel: match[2]}, function(err, data){
-          // If this channel matches one in the config, convert to the IRC name
-          var irc_channel = irc_channel_from_slack_channel(data.channel.name);
-          callback(err, {match: entity, replace: irc_channel});
-        });
+        // If this channel matches one in the config, convert to the IRC name
+        var irc_channel = irc_channel_from_slack_channel_id(match[2]);
+        if(irc_channel) {
+          callback(null, {match: entity, replace: irc_channel});
+        } else {
+          slack_api("channels.info", {channel: match[2]}, function(err, data){
+            var irc_channel = irc_channel_from_slack_channel(data.channel.name);
+            callback(err, {match: entity, replace: irc_channel});
+          });
+        }
       }
     }, function(err, results) {
       //console.log(results);
@@ -417,7 +428,17 @@ function replace_slack_entities(text, replace_callback) {
 function irc_channel_from_slack_channel(name) {
   var irc_channel = '#'+name;
   for(var i in config.channels) {
-    if(name == config.channels[i].slack) {
+    if(name == config.channels[i].slack_name) {
+      irc_channel = config.channels[i].irc;
+    }
+  }
+  return irc_channel;
+}
+
+function irc_channel_from_slack_channel_id(channel_id) {
+  var irc_channel = null;
+  for(var i in config.channels) {
+    if(channel_id == config.channels[i].slack_id) {
       irc_channel = config.channels[i].irc;
     }
   }
