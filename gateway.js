@@ -266,7 +266,7 @@ function process_irc_to_slack(nick, channel, message, type, event) {
   message = message.replace(/\[([a-zA-Z0-9_-]+)\]/g, function(matched, nickname, index){
     var slack_user_id = slack_username_to_id(nickname);
     if(slack_user_id) {
-      return '<@'+slack_username_to_id(nickname)+'>';
+      return '<@'+slack_user_id+'>';
     } else {
       return matched;
     }
@@ -372,7 +372,7 @@ function slack_user_id_to_username(uid, callback) {
         var username = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/, '_').substring(0,14);
         console.log("Username: "+uid+" => "+username);
         username_cache[uid] = username;
-        userid_cache[username] = uid;
+        userid_cache[username.toLowerCase()] = uid;
         callback(err, username);
       }
     });
