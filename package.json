@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "async": "^1.4.0",
-    "hapi": "^8.8.1",
+    "hapi": "^18.1.0",
     "html-entities": "*",
     "irc": "*",
     "irc-colors": "^1.2.0",
