@@ -497,56 +497,72 @@ function process_message(channel, username, method, text) {
 }
 
 function connect_to_irc(username, irc_nick, method) {
-  clients[method+":"+username] = new irc.Client(config.irc.hostname, irc_nick, {
+  const clientId = method + ":" + username;
+  const ircClient = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
     debug: false,
     userName: method+'user',
     realName: username+" via "+method+"-irc-gateway",
     channels: config.channels.map(function(c){ return c.irc; })
   });
+  clients[clientId] = ircClient;
 
-  clients[method+":"+username].websession = Math.random().toString(36);
-  sessions[clients[method+":"+username].websession] = {method: method, username: username};
+  ircClient.websession = Math.random().toString(36);
+  sessions[ircClient.websession] = {method: method, username: username};
 
   // Set a timer to disconnect the bot after a while
-  timers[method+":"+username] = setTimeout(function(){
-    console.log("[timeout] ("+method+"/"+username+") timed out");
-    if(clients[method+":"+username]) {
-      clients[method+":"+username].disconnect('Slack user timed out');
+  timers[clientId] = setTimeout(function() {
+    console.log(`[timeout] (${method}/${username}) timed out`);
+    if (ircClient) {
+      ircClient.disconnect('Slack user timed out');
     }
-    clients[method+":"+username] = null;
-    timers[method+":"+username] = null;
+    ircClient = null;
+    timers[clientId] = null;
   }, config.irc.disconnect_timeout);
 
-  clients[method+":"+username].connect(function() {
-    console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
+  const nickReclaimListener = (channel, nick, reason, partMessage) => {
+    if (nick != irc_nick) return;
+
+    ircClient.send("NICK", irc_nick);
+
+    // Assume that it works, or at least limit it to a single attempt
+    ircClient.removeListener('quit', nickReclaimListener);
+  }
+
+  ircClient.connect(function(registrationMessage) {
+    console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map((c) => c.irc)].join());
+    const realNick = registrationMessage.args[0];
+    if (username == realNick) return;
+    console.log(`[connecting] IRC nick was set to "${realNick}", will now listen for part events to reclaim target "${irc_nick}"`);
+
+    ircClient.addListener('quit', nickReclaimListener);
   });
 
-  clients[method+":"+username].addListener('join', function(channel, nick, message){
-    console.log("[join] "+nick+" joined "+channel+" (me: "+clients[method+":"+username].nick+")");
-    if(nick == clients[method+":"+username].nick) {
-      console.log("[debug] "+irc_nick+" successfully joined "+channel+"! (joined as "+nick+")");
+  ircClient.addListener('join', function(channel, nick, message) {
+    console.log(`[join] ${nick} joined ${channel} (me: ${ircClient.nick})`);
 
-      // Now send the queued messages for the channel
-      if(queued[method+":"+username]) {
-        // Delay to give Loqi time to +v
-        (function(method, username, channel){
-          setTimeout(function(){
-            var text;
-            while(text = queued[method+":"+username].pop(channel)) {
-              clients[method+":"+username].say(channel, text);
-            }
-          }, 500);
-        })(method, username, channel);
+    // Bail if it's not about us
+    if (nick != ircClient.nick) return;
+
+    console.log(`[debug] ${irc_nick} successfully joined ${channel}! (joined as ${nick})`);
+
+    // Bail if there are no queued messages for the channel
+    if (!queued[clientId]) return;
+
+    // Delay to give Loqi time to +v
+    setTimeout(function() {
+      let text;
+      while (text = queued[clientId].pop(channel)) {
+        ircClient.say(channel, text);
       }
-    }
+    }, 500);
   });
 
-  clients[method+":"+username].addListener('error', function(message) {
+  ircClient.addListener('error', function(message) {
     console.log("[error] ("+method+"/"+username+") ", message);
   });
 
-  clients[method+":"+username].addListener('pm', function(from, message) {
-    clients[method+":"+username].say(from, "[error] Sorry, private messages to users of the "+method+" gateway are not supported.");
+  ircClient.addListener('pm', function(from, message) {
+    ircClient.say(from, "[error] Sorry, private messages to users of the "+method+" gateway are not supported.");
   })
 }
