@@ -520,7 +520,7 @@ function connect_to_irc(username, irc_nick, method) {
     timers[clientId] = null;
   }, config.irc.disconnect_timeout);
 
-  const nickReclaimListener = (channel, nick, reason, partMessage) => {
+  const nickReclaimListener = (nick, reason, channels, quitMessage) => {
     if (nick != irc_nick) return;
 
     ircClient.send("NICK", irc_nick);
