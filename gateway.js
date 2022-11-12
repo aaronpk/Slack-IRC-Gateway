@@ -522,6 +522,7 @@ function connect_to_irc(username, irc_nick, method) {
   const nickReclaimListener = (nick, reason, channels, quitMessage) => {
     if (nick != irc_nick) return;
 
+    console.log(`[quit] Attemping to change nick to ${irc_nick}`);
     ircClient.send("NICK", irc_nick);
 
     // Assume that it works, or at least limit it to a single attempt
@@ -532,7 +533,7 @@ function connect_to_irc(username, irc_nick, method) {
     console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map((c) => c.irc)].join());
     const realNick = registrationMessage.args[0];
     if (username == realNick) return;
-    console.log(`[connecting] IRC nick was set to "${realNick}", will now listen for part events to reclaim target "${irc_nick}"`);
+    console.log(`[connecting] IRC nick was set to "${realNick}", will now listen for part events to reclaim nick "${irc_nick}"`);
 
     ircClient.addListener('quit', nickReclaimListener);
   });
