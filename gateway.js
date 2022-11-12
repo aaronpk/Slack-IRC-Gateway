@@ -477,6 +477,8 @@ function process_message(channel, username, method, text) {
       clients[method+":"+username].send("NICK", match[1]);
     } else if(match=text.match(/^\/me (.+)/)) {
       clients[method+":"+username].action(channel, match[1]);
+    } else if(match=text.match(/^\/quit/)) {
+      clients[method+":"+username].disconnect('quit');
     } else {
       clients[method+":"+username].say(channel, text);
     }
