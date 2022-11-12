@@ -35,21 +35,20 @@ var server = new Hapi.Server({
 server.route({
   method: 'GET',
   path: '/',
-  handler: function (request, reply) {
-    reply('This is a Slack/IRC Gateway. Source code here: https://github.com/aaronpk/Slack-IRC-Gateway');
+  handler: function (request, h) {
+    return 'This is a Slack/IRC Gateway. Source code here: https://github.com/aaronpk/Slack-IRC-Gateway';
   }
 });
 
 server.route({
   method: 'POST',
   path: '/gateway/input',
-  handler: function (req, reply) {
+  handler: function (req, h) {
 
     // Respond to the Slack Events API challenge
     if(req.payload.type == "url_verification") {
-      reply({challenge: req.payload.challenge});
       console.log("Event API Token: "+req.payload.token);
-      return;
+      return {challenge: req.payload.challenge};
     }
 
     if(!req.payload.event) {
@@ -58,14 +57,12 @@ server.route({
 
     // Ignore everything except regular text messages and "/me"
     if(!(req.payload.event.subtype == null || req.payload.event.subtype == "me_message")) {
-      reply('ignoring');
-      return;
+      return 'ignoring';
     }
 
     // Verify the request came from Slack
     if(config.slack.event_api_token != req.payload.token) {
-      reply('unauthorized');
-      return;
+      return 'unauthorized';
     }
 
     var event = req.payload.event;
@@ -81,12 +78,11 @@ server.route({
     }
 
     if(!irc_channel) {
-      reply('no irc channel');
-      return;
+      return 'no irc channel';
     }
 
     // Acknowledge the Slack webhook immediately
-    reply('ok: '+event.client_msg_id);
+    // reply('ok: '+event.client_msg_id);
 
     slack_user_id_to_username(event.user, function(err, username){
       if(err) {
@@ -138,15 +134,16 @@ server.route({
       }
     });
 
+    reply('ok: '+event.client_msg_id);
   }
 });
 
 server.route({
   method: 'POST',
   path: '/web/input',
-  handler: function (request, reply) {
+  handler: function (request, h) {
     if(request.payload.token != config.web.token) {
-      reply('unauthorized');
+      return 'unauthorized';
     } else {
       if(sessions[request.payload.session]) {
         var session = sessions[request.payload.session];
@@ -155,11 +152,11 @@ server.route({
         var text = request.payload.text;
         var channel = request.payload.channel;
 
-        reply({username: username});
+        return {username: username};
 
         process_message(channel, username, 'web', text);
       } else {
-        reply({error: 'invalid_session'})
+        return {error: 'invalid_session'};
       }
     }
   }
@@ -169,18 +166,18 @@ server.route({
 server.route({
   method: 'POST',
   path: '/web/join',
-  handler: function (request, reply) {
+  handler: function (request, h) {
     if(request.payload.token != config.web.token) {
-      reply('unauthorized');
+      return 'unauthorized';
     } else {
       var username = request.payload.user_name;
 
       if(clients["web:"+username] == null) {
         connect_to_irc(username, username, 'web');
         // Reply with a session token that will be required with every message to /web/input
-        reply({"status": "connecting", "session": clients["web:"+username].websession});
+        return {"status": "connecting", "session": clients["web:"+username].websession};
       } else {
-        reply({"status":"connected", "session": clients["web:"+username].websession});
+        return {"status":"connected", "session": clients["web:"+username].websession};
       }
     }
   }
@@ -189,15 +186,15 @@ server.route({
 server.route({
   method: 'POST',
   path: '/web/session',
-  handler: function (request, reply) {
-    if(request.payload.token != config.web.token) {
-      reply('unauthorized');
+  handler: function (request, h) {
+    if(!request.payload || request.payload.token != config.web.token) {
+      return 'unauthorized';
     } else {
       if(sessions[request.payload.session]) {
         var data = sessions[request.payload.session];
-        reply({username: data.username});
+        return {username: data.username};
       } else {
-        reply({});
+        return {};
       }
     }
   }
@@ -212,7 +209,7 @@ var ircToSlackQueue = [];
 // Create an IRC bot that joins all the channels to route messages to Slack
 ircToSlack = new irc.Client(config.irc.hostname, config.irc.gateway_nick, {
   autoConnect: false,
-  debug: false,
+  debug: true,
   userName: 'IRCSlack',
   realName: "IRC to Slack Gateway",
   channels: config.channels.map(function(c){ return c.irc; })
