@@ -1,9 +1,8 @@
-var Hapi = require('hapi');
+const Hapi = require('@hapi/hapi');
 var irc = require('irc');
 var request = require('request');
 var async = require('async');
-var Entities = require('html-entities').AllHtmlEntities;
-var entities = new Entities();
+const {decode} = require('html-entities');
 var emoji = require('./emoji');
 var queue = require('./queue').queue;
 
@@ -28,8 +27,7 @@ var timers = {}
 var ircToSlack;
 var ircUsers = [];
 
-var server = new Hapi.Server();
-server.connection({
+var server = new Hapi.Server({
   host: config.host,
   port: config.port
 });
@@ -418,10 +416,10 @@ function replace_slack_entities(text, replace_callback) {
       for(var i in results) {
         text = text.replace(results[i].match, results[i].replace);
       }
-      replace_callback(entities.decode(text));
+      replace_callback(decode(text));
     });
   } else {
-    replace_callback(entities.decode(text));
+    replace_callback(decode(text));
   }
 }
 

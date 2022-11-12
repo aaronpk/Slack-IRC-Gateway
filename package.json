@@ -16,8 +16,8 @@
     "url": "https://github.com/aaronpk/slack-irc-gateway"
   },
   "dependencies": {
+    "@hapi/hapi": "^21.0.0",
     "async": "^1.4.0",
-    "hapi": "^18.1.0",
     "html-entities": "*",
     "irc": "*",
     "irc-colors": "^1.2.0",
