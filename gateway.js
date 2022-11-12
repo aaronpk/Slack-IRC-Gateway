@@ -207,13 +207,15 @@ server.start(function () {
 var ircToSlackQueue = [];
 
 // Create an IRC bot that joins all the channels to route messages to Slack
-ircToSlack = new irc.Client(config.irc.hostname, config.irc.gateway_nick, {
+var options = {
   autoConnect: false,
   debug: true,
-  userName: 'IRCSlack',
+  userName: config.irc.gateway_nick,
   realName: "IRC to Slack Gateway",
-  channels: config.channels.map(function(c){ return c.irc; })
-});
+  channels: config.channels.map(function(c){ return c.irc; }),
+  ...config.irc.options
+};
+ircToSlack = new irc.Client(config.irc.hostname, config.irc.gateway_nick, options);
 ircToSlack.connect(function(){
   console.log("[connecting] Connecting Gateway user to IRC... Channels: "+[config.channels.map(function(c){ return c.irc; })].join());
 });
