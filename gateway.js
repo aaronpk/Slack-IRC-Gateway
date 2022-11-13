@@ -134,7 +134,7 @@ server.route({
       }
     });
 
-    reply('ok: '+event.client_msg_id);
+    return 'ok: '+event.client_msg_id;
   }
 });
 
