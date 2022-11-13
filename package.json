@@ -18,7 +18,7 @@
   "dependencies": {
     "@hapi/hapi": "^21.0.0",
     "async": "^1.4.0",
-    "html-entities": "*",
+    "html-entities": "2.3.3",
     "irc": "*",
     "irc-colors": "^1.2.0",
     "punycode": "^2.1.0",

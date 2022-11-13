@@ -51,8 +51,11 @@ server.route({
       return {challenge: req.payload.challenge};
     }
 
+    // console.log("[SLACK] "+JSON.stringify(req.payload));
+    
     if(!req.payload.event) {
-      return;
+      console.log("No event in payload");
+      return 'no event';
     }
 
     // Ignore everything except regular text messages and "/me"
@@ -152,9 +155,9 @@ server.route({
         var text = request.payload.text;
         var channel = request.payload.channel;
 
-        return {username: username};
-
         process_message(channel, username, 'web', text);
+
+        return {username: username};
       } else {
         return {error: 'invalid_session'};
       }
