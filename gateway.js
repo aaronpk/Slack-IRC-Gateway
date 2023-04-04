@@ -59,7 +59,8 @@ server.route({
     }
 
     // Ignore everything except regular text messages and "/me"
-    if(!(req.payload.event.subtype == null || req.payload.event.subtype == "me_message")) {
+    if(!(req.payload.event.subtype == null || ["me_message", "file_share"].includes(req.payload.event.subtype))) {
+      console.log("Ignoring event. type: "+req.payload.event.type+" subtype: "+req.payload.event.subtype);
       return 'ignoring';
     }
 
@@ -91,7 +92,7 @@ server.route({
       if(err) {
         console.log("Error looking up user ID: "+event.user);
       } else {
-
+        
         switch(event.type) {
           case "message":
             if(event.text) {
@@ -108,28 +109,29 @@ server.route({
               });
             }
 
-            // If there are any files in the image, make them public and send the image URL too
+            // If there are any files in the image, download them and re-upload them to a public URL
             if(event.files) {
               for(var i in event.files) {
                 var file = event.files[i];
-                slack_api("files.sharedPublicURL", {
-                  file: file.id
-                }, function(err, data){
-                  if(!err) {
-                    var file_url = data.file.permalink_public;
-                    console.log("File made public: "+file_url);
-                    // The only "public" aspect that Slack returns is a web page that embeds the image.
-                    // Parse the web page looking for the img tag that contains the actual image URL.
-                    request.get(data.file.permalink_public, function(err, response, body) {
-                      if(imgmatch=body.match(/img src="([^"]+pub_secret=[^"]+)"/)) {
-                        var file_url = imgmatch[1];
-                        process_message(irc_channel, username, 'slack', file_url);
-                      }
-                    });
 
+                console.log("file info", file);
+                var file_url = file.url_private_download;
+
+                // Hand off the download URL and slack token to the archiving service
+                request.post(config.files.upload_endpoint, {
+                  form: {
+                    file: file_url,
+                    slack_token: config.slack.token,
+                    token: config.files.token
                   }
-
+                }, function(err, response, body){
+                  console.log(err, body);
+                  var data = JSON.parse(body);
+                  if(data.url) {
+                    process_message(irc_channel, username, 'slack', data.url)
+                  }
                 });
+
               }
             }
             break;
