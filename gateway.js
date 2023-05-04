@@ -75,9 +75,11 @@ server.route({
 
     // Map Slack channels to IRC channels, and ignore messages from channels that don't have a mapping
     var irc_channel = false;
+    var slack_channel = false;
     for(var i in config.channels) {
       if(event.channel == config.channels[i].slack_id) {
         irc_channel = config.channels[i].irc;
+        slack_channel_name = config.channels[i].slack_name;
       }
     }
 
@@ -121,6 +123,7 @@ server.route({
                 request.post(config.files.upload_endpoint, {
                   form: {
                     file: file_url,
+                    slack_channel: slack_channel_name,
                     slack_token: config.slack.token,
                     token: config.files.token
                   }
