@@ -390,7 +390,7 @@ function slack_username_to_id(username) {
 }
 
 function replace_slack_entities(text, replace_callback) {
-  text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)\\|([^>]+)>','g'), '$2');
+  text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)\\|([^>]+)>','g'), '$1');
   text = text.replace(new RegExp('<([a-z]+:[^\\|>]+)>','g'), '$1');
 
   text = emoji.slack_to_unicode(text);
