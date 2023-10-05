@@ -107,7 +107,7 @@ server.route({
                 if(event.thread_ts) {
                   text = "↩️ "+text;
                 }
-                process_message(irc_channel, username, 'slack', text);
+                process_message(irc_channel, username, event.user, 'slack', text);
               });
             }
 
@@ -131,7 +131,7 @@ server.route({
                   console.log(err, body);
                   var data = JSON.parse(body);
                   if(data.url) {
-                    process_message(irc_channel, username, 'slack', data.url)
+                    process_message(irc_channel, username, event.user, 'slack', data.url)
                   }
                 });
 
@@ -160,7 +160,7 @@ server.route({
         var text = request.payload.text;
         var channel = request.payload.channel;
 
-        process_message(channel, username, 'web', text);
+        process_message(channel, username, username, 'web', text);
 
         return {username: username};
       } else {
@@ -181,7 +181,7 @@ server.route({
       var username = request.payload.user_name;
 
       if(clients["web:"+username] == null) {
-        connect_to_irc(username, username, 'web');
+        connect_to_irc(username, username, "webuser", 'web');
         // Reply with a session token that will be required with every message to /web/input
         return {"status": "connecting", "session": clients["web:"+username].websession};
       } else {
@@ -257,8 +257,9 @@ send_to_slack_from_queue();
 function process_irc_to_slack(nick, channel, message, type, event) {
   console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
 
+  var client_id = "slack:"+event.user;
   // Ignore IRC messages from this Slack gateway
-  if(event.user == '~slackuser') {
+  if(clients[client_id] != null) {
     return;
   }
 
@@ -460,7 +461,7 @@ function slack_channel_from_irc_channel(name) {
   return slack_channel;
 }
 
-function process_message(channel, username, method, text) {
+function process_message(channel, username, user_id, method, text) {
   var irc_nick;
   if(method == 'slack') {
     irc_nick = "["+username+"]";
@@ -468,36 +469,38 @@ function process_message(channel, username, method, text) {
     irc_nick = username;
   }
 
-  // Connect and add to the queue
-  if(clients[method+":"+username] == null) {
-    if(queued[method+":"+username] == null) {
-      queued[method+":"+username] = new queue();
-    }
-    queued[method+":"+username].push(channel, text);
+  var client_id = method+":"+user_id;
 
-    connect_to_irc(username, irc_nick, method);
-  } else if(queued[method+":"+username] && queued[method+":"+username].length() > 0) {
+  // Connect and add to the queue
+  if(clients[client_id] == null) {
+    if(queued[client_id] == null) {
+      queued[client_id] = new queue();
+    }
+    queued[client_id].push(channel, text);
+
+    connect_to_irc(username, irc_nick, user_id, method);
+  } else if(queued[client_id] && queued[client_id].length() > 0) {
     // There is already a client and something in the queue, which means
     // the bot is currently connecting. Keep adding to the queue
-    queued[method+":"+username].push(channel, text);
+    queued[client_id].push(channel, text);
   } else {
     // Queue is empty, so bot is already connected
     var match;
     if(match=text.match(/^\/nick (.+)/)) {
-      clients[method+":"+username].send("NICK", match[1]);
+      clients[client_id].send("NICK", match[1]);
     } else if(match=text.match(/^\/me (.+)/)) {
-      clients[method+":"+username].action(channel, match[1]);
+      clients[client_id].action(channel, match[1]);
     } else if(match=text.match(/^\/quit/)) {
-      clients[method+":"+username].disconnect('quit');
+      clients[client_id].disconnect('quit');
     } else {
-      clients[method+":"+username].say(channel, text);
+      clients[client_id].say(channel, text);
     }
 
-    keepalive(method, username);
+    keepalive(method, user_id);
   }
 }
 
-function keepalive(method, username) {
+function keepalive(method, user_id) {
   var timeout;
   
   if(method == 'slack') {
@@ -506,23 +509,25 @@ function keepalive(method, username) {
     timeout = config.web.disconnect_timeout;    
   }
   
-  clearTimeout(timers[method+":"+username]);
-  timers[method+":"+username] = setTimeout(function(){
-    console.log(method+" user timed out: "+username);
-    if(clients[method+":"+username]) {
-      clients[method+":"+username].disconnect('went away');
+  var client_id = method+":"+user_id;
+
+  clearTimeout(timers[client_id]);
+  timers[client_id] = setTimeout(function(){
+    console.log(method+" user timed out: "+user_id);
+    if(clients[client_id]) {
+      clients[client_id].disconnect('went away');
     }
-    clients[method+":"+username] = null;
-    timers[method+":"+username] = null;
+    clients[client_id] = null;
+    timers[client_id] = null;
   }, timeout);
 }
 
-function connect_to_irc(username, irc_nick, method) {
+function connect_to_irc(username, irc_nick, user_id, method) {
   const clientId = method + ":" + username;
   const ircClient = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
     debug: false,
-    userName: method+'user',
+    userName: user_id,
     realName: username+" via "+method+"-irc-gateway",
     channels: config.channels.map(function(c){ return c.irc; })
   });
@@ -532,7 +537,7 @@ function connect_to_irc(username, irc_nick, method) {
   sessions[ircClient.websession] = {method: method, username: username};
 
   // Set a timer to disconnect the bot after a while
-  keepalive(method, username);
+  keepalive(method, user_id);
 
   const nickReclaimListener = (nick, reason, channels, quitMessage) => {
     if (nick != irc_nick) return;
