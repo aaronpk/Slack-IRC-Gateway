@@ -180,14 +180,15 @@ server.route({
     if(request.payload.token != config.web.token) {
       return 'unauthorized';
     } else {
-      var username = request.payload.user_name;
+      const username = request.payload.user_name;
+      const user_id_hash = user_hash(username);
 
-      if(clients["web:"+username] == null) {
-        connect_to_irc(username, username, "webuser", 'web');
+      if(clients["web:"+user_id_hash] == null) {
+        connect_to_irc(username, username, user_id_hash, 'web');
         // Reply with a session token that will be required with every message to /web/input
-        return {"status": "connecting", "session": clients["web:"+username].websession};
+        return {"status": "connecting", "session": clients["web:"+user_id_hash].websession};
       } else {
-        return {"status":"connected", "session": clients["web:"+username].websession};
+        return {"status":"connected", "session": clients["web:"+user_id_hash].websession};
       }
     }
   }
@@ -472,15 +473,8 @@ function process_message(channel, username, user_id, method, text) {
     irc_nick = username;
   }
 
-  // Regardless of the user_id input, we need to use only 10 chars from it to
-  // stay within the limit of IRC usernames. Calculate a SHA256 hash and use
-  // the last 10 chars from it.
-  const base64Digest = crypto.createHash("sha256")
-    .update(user_id)
-    .digest("base64");
-  const user_id_hash = base64url.fromBase64(base64Digest).slice(-10);
-
-  var client_id = method+":"+user_id_hash;
+  const user_id_hash = user_hash(user_id);
+  const client_id = method+":"+user_id_hash;
 
   // Connect and add to the queue
   if(clients[client_id] == null) {
@@ -511,6 +505,18 @@ function process_message(channel, username, user_id, method, text) {
   }
 }
 
+function user_hash(username) {
+  // Regardless of the username input, we need to use only 10 chars from it to
+  // stay within the limit of IRC usernames. Calculate a SHA256 hash and use
+  // the last 10 chars from it.
+  const base64Digest = crypto.createHash("sha256")
+    .update(username)
+    .digest("base64");
+  return base64url.fromBase64(base64Digest).slice(-10);
+}
+
+
+
 function keepalive(method, user_id) {
   var timeout;
   
@@ -533,12 +539,12 @@ function keepalive(method, user_id) {
   }, timeout);
 }
 
-function connect_to_irc(username, irc_nick, user_id, method) {
-  const clientId = method + ":" + user_id;
+function connect_to_irc(username, irc_nick, user_id_hash, method) {
+  const clientId = method + ":" + user_id_hash;
   const ircClient = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
     debug: false,
-    userName: user_id,
+    userName: user_id_hash,
     realName: username+" via "+method+"-irc-gateway",
     channels: config.channels.map(function(c){ return c.irc; })
   });
@@ -548,7 +554,7 @@ function connect_to_irc(username, irc_nick, user_id, method) {
   sessions[ircClient.websession] = {method: method, username: username};
 
   // Set a timer to disconnect the bot after a while
-  keepalive(method, user_id);
+  keepalive(method, user_id_hash);
 
   const nickReclaimListener = (nick, reason, channels, quitMessage) => {
     if (nick != irc_nick) return;
