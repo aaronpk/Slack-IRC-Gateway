@@ -18,6 +18,7 @@
   "dependencies": {
     "@hapi/hapi": "^21.0.0",
     "async": "^1.4.0",
+    "base64url": "^3.0.1",
     "html-entities": "2.3.3",
     "irc": "*",
     "irc-colors": "^1.2.0",

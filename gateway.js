@@ -3,6 +3,8 @@ var irc = require('irc');
 var request = require('request');
 var async = require('async');
 const {decode} = require('html-entities');
+const crypto = require("crypto");
+const base64url = require("base64url");
 var emoji = require('./emoji');
 var queue = require('./queue').queue;
 
@@ -257,6 +259,7 @@ send_to_slack_from_queue();
 function process_irc_to_slack(nick, channel, message, type, event) {
   console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
 
+  // event.user is the IRC username, which is limited to 10 chars
   var client_id = "slack:"+event.user;
   // Ignore IRC messages from this Slack gateway
   if(clients[client_id] != null) {
@@ -469,7 +472,15 @@ function process_message(channel, username, user_id, method, text) {
     irc_nick = username;
   }
 
-  var client_id = method+":"+user_id;
+  // Regardless of the user_id input, we need to use only 10 chars from it to
+  // stay within the limit of IRC usernames. Calculate a SHA256 hash and use
+  // the last 10 chars from it.
+  const base64Digest = crypto.createHash("sha256")
+    .update(user_id)
+    .digest("base64");
+  const user_id_hash = base64url.fromBase64(base64Digest).slice(-10);
+
+  var client_id = method+":"+user_id_hash;
 
   // Connect and add to the queue
   if(clients[client_id] == null) {
@@ -478,7 +489,7 @@ function process_message(channel, username, user_id, method, text) {
     }
     queued[client_id].push(channel, text);
 
-    connect_to_irc(username, irc_nick, user_id, method);
+    connect_to_irc(username, irc_nick, user_id_hash, method);
   } else if(queued[client_id] && queued[client_id].length() > 0) {
     // There is already a client and something in the queue, which means
     // the bot is currently connecting. Keep adding to the queue
@@ -523,7 +534,7 @@ function keepalive(method, user_id) {
 }
 
 function connect_to_irc(username, irc_nick, user_id, method) {
-  const clientId = method + ":" + username;
+  const clientId = method + ":" + user_id;
   const ircClient = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
     debug: false,
