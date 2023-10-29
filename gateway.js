@@ -501,7 +501,7 @@ function process_message(channel, username, user_id, method, text) {
       clients[client_id].say(channel, text);
     }
 
-    keepalive(method, user_id);
+    keepalive(client_id);
   }
 }
 
@@ -517,7 +517,7 @@ function user_hash(username) {
 
 
 
-function keepalive(method, user_id) {
+function keepalive(method, client_id) {
   var timeout;
   
   if(method == 'slack') {
@@ -526,11 +526,9 @@ function keepalive(method, user_id) {
     timeout = config.web.disconnect_timeout;    
   }
   
-  var client_id = method+":"+user_id;
-
   clearTimeout(timers[client_id]);
   timers[client_id] = setTimeout(function(){
-    console.log(method+" user timed out: "+user_id);
+    console.log("user timed out: "+client_id);
     if(clients[client_id]) {
       clients[client_id].disconnect('went away');
     }
@@ -554,7 +552,7 @@ function connect_to_irc(username, irc_nick, user_id_hash, method) {
   sessions[ircClient.websession] = {method: method, username: username};
 
   // Set a timer to disconnect the bot after a while
-  keepalive(method, user_id_hash);
+  keepalive(method, clientId);
 
   const nickReclaimListener = (nick, reason, channels, quitMessage) => {
     if (nick != irc_nick) return;
