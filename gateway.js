@@ -47,6 +47,9 @@ server.route({
   path: '/gateway/input',
   handler: function (req, h) {
 
+    // console.log(req.payload);
+
+
     // Respond to the Slack Events API challenge
     if(req.payload.type == "url_verification") {
       console.log("Event API Token: "+req.payload.token);
@@ -91,7 +94,7 @@ server.route({
 
     // Acknowledge the Slack webhook immediately
     // reply('ok: '+event.client_msg_id);
-
+    
     slack_user_id_to_username(event.user, function(err, username){
       if(err) {
         console.log("Error looking up user ID: "+event.user);
@@ -102,7 +105,7 @@ server.route({
             if(event.text) {
               // Replace Slack refs with IRC refs
               replace_slack_entities(event.text, function(text) {
-                console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] "+text);
+                console.log("INPUT: #"+irc_channel+" "+event.channel+" ["+username+"] ("+event.user+") "+text);
                 if(event.subtype == "me_message") {
                   text = "/me "+text;
                 }
@@ -181,7 +184,7 @@ server.route({
       return 'unauthorized';
     } else {
       const username = request.payload.user_name;
-      const user_id_hash = user_hash(username);
+      const user_id_hash = user_hash(username, username);
 
       if(clients["web:"+user_id_hash] == null) {
         connect_to_irc(username, username, user_id_hash, 'web');
@@ -473,7 +476,7 @@ function process_message(channel, username, user_id, method, text) {
     irc_nick = username;
   }
 
-  const user_id_hash = user_hash(user_id);
+  const user_id_hash = user_hash(username, user_id);
   const client_id = method+":"+user_id_hash;
 
   // Connect and add to the queue
@@ -505,14 +508,17 @@ function process_message(channel, username, user_id, method, text) {
   }
 }
 
-function user_hash(username) {
+function user_hash(username, user_id) {
   // Regardless of the username input, we need to use only 10 chars from it to
-  // stay within the limit of IRC usernames. Calculate a SHA256 hash and use
-  // the last 10 chars from it.
+  // stay within the limit of IRC usernames.
+  // Calculate a SHA256 hash and use the last 10 chars from it.
   const base64Digest = crypto.createHash("sha256")
     .update(username)
     .digest("base64");
-  return base64url.fromBase64(base64Digest).slice(-10);
+  const base64URL = base64url.fromBase64(base64Digest);
+  const userFirst6 = username.slice(0,6);
+  const hashLen = 10 - userFirst6.length;
+  return userFirst6 + base64URL.slice(-1 * hashLen);
 }
 
 
@@ -538,6 +544,9 @@ function keepalive(method, client_id) {
 }
 
 function connect_to_irc(username, irc_nick, user_id_hash, method) {
+  
+  console.log("Connecting to IRC for username="+username+" irc_nick="+irc_nick+" user_id_hash="+user_id_hash);
+  
   const clientId = method + ":" + user_id_hash;
   const ircClient = new irc.Client(config.irc.hostname, irc_nick, {
     autoConnect: false,
@@ -565,7 +574,9 @@ function connect_to_irc(username, irc_nick, user_id_hash, method) {
   }
 
   ircClient.connect(function(registrationMessage) {
-    console.log("[connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map((c) => c.irc)].join());
+    const date = ((new Date()).toString());
+    console.log(date+" [connecting] ("+method+"/"+username+") Connecting to IRC... Channels: "+[config.channels.map((c) => c.irc)].join());
+    console.log(registrationMessage);
     const realNick = registrationMessage.args[0];
     if (username == realNick) return;
     console.log(`[connecting] IRC nick was set to "${realNick}", will now listen for part events to reclaim nick "${irc_nick}"`);
