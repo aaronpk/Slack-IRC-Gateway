@@ -261,13 +261,22 @@ function send_to_slack_from_queue() {
 send_to_slack_from_queue();
 
 function process_irc_to_slack(nick, channel, message, type, event) {
-  console.log('[irc] ('+channel+' '+nick+' '+type+') "'+message+'"');
+  console.log('[irc] ('+channel+' '+nick+' '+event.user+' '+type+') "'+message+'"');
 
   // event.user is the IRC username, which is limited to 10 chars
   var client_id = "slack:"+event.user;
   // Ignore IRC messages from this Slack gateway
   if(clients[client_id] != null) {
     return;
+  }
+
+  // Discord messages come in as "<nick> message" sometimes
+  if(nick == "IWDiscord") {
+    var r = new RegExp('<([^ ]+)> (.+)');
+    if(m = message.match(r)) {
+      nick = m[1];
+      message = m[2];
+    }
   }
 
   // Convert IRC text to Slack text
@@ -479,6 +488,11 @@ function process_message(channel, username, user_id, method, text) {
   const user_id_hash = user_hash(username, user_id);
   const client_id = method+":"+user_id_hash;
 
+  // Add the truncated username if the bot ends up with a tilde to check for doubled up messages
+  const user_id_hash2 = method+":~"+user_id_hash.substring(0,user_id_hash.length-1);
+  clients[user_id_hash2] = 'alias:'+client_id;
+  console.log("Adding backup user ID: "+user_id_hash2);
+
   // Connect and add to the queue
   if(clients[client_id] == null) {
     if(queued[client_id] == null) {
@@ -504,7 +518,7 @@ function process_message(channel, username, user_id, method, text) {
       clients[client_id].say(channel, text);
     }
 
-    keepalive(client_id);
+    keepalive(method, client_id);
   }
 }
 
@@ -536,7 +550,7 @@ function keepalive(method, client_id) {
   timers[client_id] = setTimeout(function(){
     console.log("user timed out: "+client_id);
     if(clients[client_id]) {
-      clients[client_id].disconnect('went away');
+      clients[client_id].disconnect('timed out');
     }
     clients[client_id] = null;
     timers[client_id] = null;
