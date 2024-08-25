@@ -39,6 +39,16 @@ Text Replacements
 Slack supports rich text in messages such as including links. If you have any custom text replacements you'd like to do for messages sent from IRC to Slack, such as autolinking keywords, you can add a file `replacements.js` and define a function there to transform text sent from IRC to Slack. See `replacements.example.js` for an example.
 
 
+Emoji
+-----
+
+Slack uses emoji shortcodes in the API rather than emoji themselves. When new emoji or shortcodes are added, the `emoji_pretty.json` file will need to be updated. This gateway uses a copy of the file that is used by Slack, available at
+
+https://github.com/iamcal/emoji-data
+
+https://raw.githubusercontent.com/iamcal/emoji-data/master/emoji_pretty.json
+
+
 License
 -------
 
