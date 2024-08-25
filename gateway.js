@@ -406,9 +406,9 @@ function replace_slack_entities(text, replace_callback) {
 
   text = emoji.slack_to_unicode(text);
 
-  if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]+))?>/g)) {
+  if(matches=text.match(/<[@#]([UC][^>\|]+)(?:\|([^\|]*))?>/g)) {
     async.map(matches, function(entity, callback){
-      var match = entity.match(/<([@#])([UC][^>\|]+)(?:\|([^\|]+))?>/);
+      var match = entity.match(/<([@#])([UC][^>\|]+)(?:\|([^\|]*))?>/);
       //console.log("Processing "+match[2]);
       if(match[1] == "@"){
         slack_user_id_to_username(match[2], function(err, username){
