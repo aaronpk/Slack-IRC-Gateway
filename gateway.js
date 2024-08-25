@@ -430,8 +430,12 @@ function replace_slack_entities(text, replace_callback) {
           callback(null, {match: entity, replace: irc_channel});
         } else {
           slack_api("channels.info", {channel: match[2]}, function(err, data){
-            var irc_channel = irc_channel_from_slack_channel(data.channel.name);
-            callback(err, {match: entity, replace: irc_channel});
+            if(data.channel) {
+              var irc_channel = irc_channel_from_slack_channel(data.channel.name);
+              callback(err, {match: entity, replace: irc_channel});
+            } else {
+              callback(err, {match: entity, replace: match[2]});
+            }
           });
         }
       }
