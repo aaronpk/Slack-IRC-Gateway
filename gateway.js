@@ -434,7 +434,7 @@ function replace_slack_entities(text, replace_callback) {
               var irc_channel = irc_channel_from_slack_channel(data.channel.name);
               callback(err, {match: entity, replace: irc_channel});
             } else {
-              callback(err, {match: entity, replace: match[2]});
+              callback(err, {match: entity, replace: "<unknown channel>"});
             }
           });
         }
