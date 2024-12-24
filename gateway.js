@@ -629,7 +629,7 @@ function connect_to_irc(username, irc_nick, user_id_hash, method) {
   ircClient.addListener('pm', function(from, message) {
     if(message == "!nick") {
       ircClient.send("NICK", irc_nick);
-      ircClient.say(from, "[resetting nick to "+irc_nick+"]");
+      ircClient.say(from, "[nick] resetting nick to "+irc_nick);
     } else {
       ircClient.say(from, "[error] Sorry, private messages to users of the "+method+" gateway are not supported.");
     }
